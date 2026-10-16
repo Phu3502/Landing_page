@@ -544,7 +544,23 @@ function IconCardGrid({ items }) {
   );
 }
 
-function VideoPlaceholder({ label, tone = "navy" }) {
+function videoEmbedUrl(value) {
+  if (!value) return "";
+  try {
+    const url = new URL(value);
+    if (!["youtube.com", "www.youtube.com", "youtu.be", "www.youtube-nocookie.com", "vimeo.com", "www.vimeo.com"].includes(url.hostname)) return "";
+    if (url.hostname.includes("youtu")) {
+      const id = url.hostname === "youtu.be" ? url.pathname.slice(1) : url.searchParams.get("v") || url.pathname.split("/embed/")[1]?.split("/")[0];
+      return id ? "https://www.youtube-nocookie.com/embed/" + encodeURIComponent(id) : "";
+    }
+    const id = url.pathname.split("/").filter(Boolean)[0];
+    return id ? "https://player.vimeo.com/video/" + encodeURIComponent(id) : "";
+  } catch { return ""; }
+}
+
+function VideoPlaceholder({ label, url, tone = "navy" }) {
+  const embedUrl = videoEmbedUrl(url);
+  if (embedUrl) return <div className={"cm-video cm-video-" + tone + " cm-corner-lg"}><iframe src={embedUrl} title={label} className="size-full rounded-[inherit]" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowFullScreen loading="lazy" /></div>;
   return (
     <div className={"cm-video cm-video-" + tone + " cm-corner-lg"}>
       <div className="cm-video-grid" aria-hidden="true" />
@@ -676,19 +692,20 @@ function Header({ open, setOpen, activePage, onNavigate, language, onLanguageCha
 /* Hero carousel                                                       */
 /* ------------------------------------------------------------------ */
 
-function HeroCarousel({ onNavigate }) {
+function HeroCarousel({ onNavigate, heroSlides, heroCta, language = "vi" }) {
   const [index, setIndex] = useState(0);
   const [paused, setPaused] = useState(false);
+  const slides = Array.isArray(heroSlides) && heroSlides.length === SLIDES.length ? heroSlides : SLIDES;
 
   useEffect(() => {
     if (paused) return undefined;
     const id = setInterval(() => {
-      setIndex((i) => (i + 1) % SLIDES.length);
+      setIndex((i) => (i + 1) % slides.length);
     }, 6000);
     return () => clearInterval(id);
-  }, [paused]);
+  }, [paused, slides.length]);
 
-  const go = (next) => setIndex((next + SLIDES.length) % SLIDES.length);
+  const go = (next) => setIndex((next + slides.length) % slides.length);
 
   return (
     <div
@@ -701,26 +718,35 @@ function HeroCarousel({ onNavigate }) {
           className="cm-carousel-track"
           style={{ transform: "translateX(-" + index * 100 + "%)" }}
         >
-          {SLIDES.map((s, i) => (
-            <div className={"cm-slide cm-slide-bg-" + (i % 4)} key={s.title}>
-              <div className="cm-slide-grid" aria-hidden="true" />
-              <span className="cm-slide-symbol" aria-hidden="true">
-                {s.symbol}
-              </span>
-              <div className="cm-slide-content">
-                <span className="cm-eyebrow">{s.tag}</span>
-                {i === 0 ? <h1>{s.title}</h1> : <h2>{s.title}</h2>}
-                <p>{s.text}</p>
-                <button
-                  type="button"
-                  className="cm-btn cm-btn-blue cm-corner-sm"
-                  onClick={() => onNavigate("dang-ky")}
-                >
-                  Đăng ký học thử miễn phí <ArrowRight size={18} />
-                </button>
+          {slides.map((s, i) => {
+            const visibleSlide = language === "en"
+              ? { ...s, tag: s.tagEn || s.tag, title: s.titleEn || s.title, text: s.textEn || s.text }
+              : s;
+            return (
+              <div
+                className={"cm-slide cm-slide-bg-" + (i % 4)}
+                key={language + "-" + i}
+                style={s.imageUrl ? { backgroundImage: "linear-gradient(90deg, rgba(16,30,70,.93), rgba(16,30,70,.58) 62%, rgba(16,30,70,.08)), url(" + JSON.stringify(s.imageUrl) + ")", backgroundSize: "cover", backgroundPosition: "center" } : undefined}
+              >
+                <div className="cm-slide-grid" aria-hidden="true" />
+                <span className="cm-slide-symbol" aria-hidden="true">
+                  {s.symbol}
+                </span>
+                <div className="cm-slide-content">
+                  <span className="cm-eyebrow">{visibleSlide.tag}</span>
+                  {i === 0 ? <h1>{visibleSlide.title}</h1> : <h2>{visibleSlide.title}</h2>}
+                  <p>{visibleSlide.text}</p>
+                  <button
+                    type="button"
+                    className="cm-btn cm-btn-blue cm-corner-sm"
+                    onClick={() => onNavigate("dang-ky")}
+                  >
+                    {heroCta || "Đăng ký học thử miễn phí"} <ArrowRight size={18} />
+                  </button>
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
 
         <button
@@ -741,9 +767,9 @@ function HeroCarousel({ onNavigate }) {
         </button>
 
         <div className="cm-carousel-dots">
-          {SLIDES.map((s, i) => (
+          {slides.map((s, i) => (
             <button
-              key={s.title}
+              key={i}
               className={
                 "cm-carousel-dot" + (i === index ? " cm-carousel-dot-active" : "")
               }
@@ -759,11 +785,11 @@ function HeroCarousel({ onNavigate }) {
   );
 }
 
-function Hero({ onNavigate }) {
+function Hero({ onNavigate, heroSlides, homeContent, language }) {
   return (
     <section className="cm-hero">
       <div className="cm-container">
-        <HeroCarousel onNavigate={onNavigate} />
+        <HeroCarousel onNavigate={onNavigate} heroSlides={heroSlides} heroCta={homeContent?.actions?.heroCta?.vi} language={language} />
       </div>
     </section>
   );
@@ -773,13 +799,14 @@ function Hero({ onNavigate }) {
 /* Process / Personalize / Features                                    */
 /* ------------------------------------------------------------------ */
 
-function ProcessSection() {
+function ProcessSection({ content }) {
+  const items = content?.items?.map((item, index) => ({ n: "B" + (index + 1), title: item.title?.vi, desc: item.desc?.vi })) || STEPS;
   return (
     <section className="cm-section cm-process">
       <div className="cm-container">
-        <SectionHeading eyebrow="QUY TRÌNH" title="Hệ thống học tập CoreMath" center />
+        <SectionHeading eyebrow={content?.eyebrow?.vi || "QUY TRÌNH"} title={content?.title?.vi || "Hệ thống học tập CoreMath"} center />
         <div className="cm-steps">
-          {STEPS.map((s) => (
+          {items.map((s) => (
             <div className="cm-step" key={s.n}>
               <span className="cm-step-num">{s.n}</span>
               <h3>{s.title}</h3>
@@ -792,47 +819,39 @@ function ProcessSection() {
   );
 }
 
-function PersonalizationSection() {
+function PersonalizationSection({ content }) {
+  const paragraphs = content?.paragraphs?.map((item) => item.vi) || [
+    "Không có hai học sinh nào giống nhau, vì vậy CoreMath không áp dụng một khung chương trình chung cho tất cả. Mỗi em được xây dựng lộ trình riêng ngay từ đầu, dựa trên năng lực thực tế và mục tiêu cụ thể.",
+    "Trong suốt quá trình học, giáo viên quan sát sát sao từng buổi, linh hoạt điều chỉnh nội dung và phương pháp để kiến thức được tiếp thu một cách tự nhiên nhất, thay vì học thuộc máy móc.",
+    "Dù mục tiêu là cải thiện điểm số trên lớp hay ôn luyện cho các kỳ thi quốc tế như SAT, SSAT, ISEE, CoreMath luôn đồng hành cùng một lộ trình rõ ràng và có thể theo dõi được.",
+  ];
   return (
     <section className="cm-section cm-personalize">
       <div className="cm-container cm-personalize-inner">
         <div className="cm-personalize-copy">
-          <SectionHeading eyebrow="MÔ HÌNH" title="Cá nhân hoá từng lộ trình học" light />
-          <p>
-            Không có hai học sinh nào giống nhau, vì vậy CoreMath không áp dụng một
-            khung chương trình chung cho tất cả. Mỗi em được xây dựng lộ trình riêng
-            ngay từ đầu, dựa trên năng lực thực tế và mục tiêu cụ thể.
-          </p>
-          <p>
-            Trong suốt quá trình học, giáo viên quan sát sát sao từng buổi, linh hoạt
-            điều chỉnh nội dung và phương pháp để kiến thức được tiếp thu một cách
-            tự nhiên nhất, thay vì học thuộc máy móc.
-          </p>
-          <p>
-            Dù mục tiêu là cải thiện điểm số trên lớp hay ôn luyện cho các kỳ thi quốc
-            tế như SAT, SSAT, ISEE, CoreMath luôn đồng hành cùng một lộ trình rõ ràng
-            và có thể theo dõi được.
-          </p>
+          <SectionHeading eyebrow={content?.eyebrow?.vi || "MÔ HÌNH"} title={content?.title?.vi || "Cá nhân hoá từng lộ trình học"} light />
+          {paragraphs.map((paragraph, index) => <p key={index}>{paragraph}</p>)}
         </div>
-        <VideoPlaceholder label="Giới thiệu mô hình học cá nhân hoá" tone="navy" />
+        <VideoPlaceholder label="Giới thiệu mô hình học cá nhân hoá" url={content?.videoUrl} tone="navy" />
       </div>
     </section>
   );
 }
 
-function FeaturesSection({ onNavigate }) {
+function FeaturesSection({ onNavigate, content }) {
+  const items = content?.items?.map((item, index) => ({ ...FEATURES[index], title: item.title?.vi, desc: item.desc?.vi })) || FEATURES;
   return (
     <section className="cm-section cm-features">
       <div className="cm-container">
-        <SectionHeading eyebrow="LỚP HỌC ONLINE" title="Trải nghiệm học tập tại CoreMath" center />
-        <IconCardGrid items={FEATURES} />
+        <SectionHeading eyebrow={content?.eyebrow?.vi || "LỚP HỌC ONLINE"} title={content?.title?.vi || "Trải nghiệm học tập tại CoreMath"} center />
+        <IconCardGrid items={items} />
         <div className="cm-features-cta">
           <button
             type="button"
             className="cm-btn cm-btn-navy cm-corner-sm"
             onClick={() => onNavigate("dang-ky")}
           >
-            Đăng ký học thử miễn phí
+            {content?.cta?.vi || "Đăng ký học thử miễn phí"}
           </button>
         </div>
       </div>
@@ -844,14 +863,15 @@ function FeaturesSection({ onNavigate }) {
 /* Demo video + achievement photo gallery                              */
 /* ------------------------------------------------------------------ */
 
-function DemoVideoSection() {
+function DemoVideoSection({ content }) {
+  const videos = content?.items?.map((item) => ({ label: item.label?.vi, url: item.url })) || DEMO_VIDEOS.map((label) => ({ label, url: "" }));
   return (
     <section className="cm-section cm-gallery-dark">
       <div className="cm-container">
-        <SectionHeading eyebrow="VIDEO DEMO" title="Video demo lớp học" center light />
+        <SectionHeading eyebrow={content?.eyebrow?.vi || "VIDEO DEMO"} title={content?.title?.vi || "Video demo lớp học"} center light />
         <div className="cm-gallery-grid">
-          {DEMO_VIDEOS.map((label) => (
-            <VideoPlaceholder key={label} label={label} tone="blue" />
+          {videos.map((video, index) => (
+            <VideoPlaceholder key={index} label={video.label} url={video.url} tone="blue" />
           ))}
         </div>
       </div>
@@ -859,13 +879,14 @@ function DemoVideoSection() {
   );
 }
 
-function AchievementGallerySection() {
+function AchievementGallerySection({ content }) {
+  const photos = content?.items?.map((item, index) => ({ caption: item.caption?.vi, imageUrl: item.imageUrl, tall: ACHIEVEMENT_PHOTOS[index]?.tall })) || ACHIEVEMENT_PHOTOS;
   return (
     <section className="cm-section cm-photo-gallery">
       <div className="cm-container">
-        <SectionHeading eyebrow="THÀNH TÍCH" title="Thành tích học sinh" center />
+        <SectionHeading eyebrow={content?.eyebrow?.vi || "THÀNH TÍCH"} title={content?.title?.vi || "Thành tích học sinh"} center />
         <div className="cm-photo-grid">
-          {ACHIEVEMENT_PHOTOS.map((p, i) => (
+          {photos.map((p, i) => (
             <figure
               className={
                 "cm-photo-tile cm-corner-lg" +
@@ -873,9 +894,9 @@ function AchievementGallerySection() {
                 " cm-photo-tone-" +
                 (i % 3)
               }
-              key={p.caption}
+              key={i}
             >
-              <ImageIcon size={20} className="cm-photo-icon" aria-hidden="true" />
+              {p.imageUrl ? <img src={p.imageUrl} alt={p.caption} loading="lazy" className="size-full object-cover" /> : <ImageIcon size={20} className="cm-photo-icon" aria-hidden="true" />}
               <figcaption>{p.caption}</figcaption>
             </figure>
           ))}
@@ -889,16 +910,17 @@ function AchievementGallerySection() {
 /* Teachers                                                             */
 /* ------------------------------------------------------------------ */
 
-function TeacherSection() {
+function TeacherSection({ content }) {
+  const teachers = content?.items?.map((teacher, index) => ({ name: teacher.name?.vi, tag: teacher.tag?.vi, credentials: teacher.credentials?.map((item) => item.vi) || [], imageUrl: teacher.imageUrl, fallback: TEACHERS[index] })) || TEACHERS;
   return (
     <section className="cm-section cm-teachers">
       <div className="cm-container">
-        <SectionHeading eyebrow="ĐỘI NGŨ" title="Giáo viên được tuyển chọn kỹ lưỡng" center />
+        <SectionHeading eyebrow={content?.eyebrow?.vi || "ĐỘI NGŨ"} title={content?.title?.vi || "Giáo viên được tuyển chọn kỹ lưỡng"} center />
         <div className="cm-teachers-grid">
-          {TEACHERS.map((t, i) => (
+          {teachers.map((t, i) => (
             <article className="cm-teacher-card cm-corner-lg" key={t.name}>
               <div className={"cm-teacher-photo cm-teacher-photo-" + (i % 3)}>
-                <User size={34} />
+                {t.imageUrl ? <img src={t.imageUrl} alt={t.name} loading="lazy" className="size-full object-cover" /> : <User size={34} />}
               </div>
               <div className="cm-teacher-body">
                 <span className="cm-teacher-avatar-mini">{initials(t.name)}</span>
@@ -949,14 +971,14 @@ function BlogCard({ post, dark, onOpen }) {
   );
 }
 
-function BlogSection({ onNavigate, onOpenPost, posts = BLOG_POSTS }) {
+function BlogSection({ onNavigate, onOpenPost, posts = BLOG_POSTS, content }) {
   return (
     <section id="blog" className="cm-section cm-blog">
       <div className="cm-container">
         <div className="cm-section-top">
-          <SectionHeading eyebrow="BLOG HỌC TẬP" title="Kiến thức & phương pháp học Toán" />
+          <SectionHeading eyebrow={content?.eyebrow?.vi || "BLOG HỌC TẬP"} title={content?.title?.vi || "Kiến thức & phương pháp học Toán"} />
           <button type="button" className="cm-see-all" onClick={() => onNavigate("blog")}>
-            Xem tất cả <ArrowRight size={16} />
+            {content?.allLabel?.vi || "Xem tất cả"} <ArrowRight size={16} />
           </button>
         </div>
         <div className="cm-blog-grid">
@@ -969,22 +991,23 @@ function BlogSection({ onNavigate, onOpenPost, posts = BLOG_POSTS }) {
   );
 }
 
-function AchievementBlogSection({ onNavigate, onOpenPost }) {
+function AchievementBlogSection({ onNavigate, onOpenPost, content }) {
+  const posts = content?.items?.map((item, index) => ({ ...ACHIEVEMENT_POSTS[index], title: item.title?.vi || ACHIEVEMENT_POSTS[index]?.title, excerpt: item.excerpt?.vi || ACHIEVEMENT_POSTS[index]?.excerpt })) || ACHIEVEMENT_POSTS;
   return (
     <section className="cm-section cm-achievements">
       <div className="cm-container">
         <div className="cm-section-top">
-          <SectionHeading eyebrow="GÓC THÀNH TÍCH" title="Học sinh CoreMath đã làm được gì" light />
+          <SectionHeading eyebrow={content?.eyebrow?.vi || "GÓC THÀNH TÍCH"} title={content?.title?.vi || "Học sinh CoreMath đã làm được gì"} light />
           <button
             type="button"
             className="cm-see-all cm-see-all-light"
             onClick={() => onNavigate("cam-nhan-hoc-vien")}
           >
-            Xem tất cả <ArrowRight size={16} />
+            {content?.allLabel?.vi || "Xem tất cả"} <ArrowRight size={16} />
           </button>
         </div>
         <div className="cm-achievements-grid">
-          {ACHIEVEMENT_POSTS.map((p) => (
+          {posts.map((p) => (
             <BlogCard key={p.slug} post={p} dark onOpen={onOpenPost} />
           ))}
         </div>
@@ -1258,18 +1281,18 @@ function FloatingCTA({ onNavigate }) {
 /* Dedicated pages                                                      */
 /* ------------------------------------------------------------------ */
 
-function HomePage({ onNavigate, onOpenPost, blogPosts }) {
+function HomePage({ onNavigate, onOpenPost, blogPosts, heroSlides, homeContent, language }) {
   return (
     <>
-      <Hero onNavigate={onNavigate} />
-      <ProcessSection />
-      <PersonalizationSection />
-      <FeaturesSection onNavigate={onNavigate} />
-      <DemoVideoSection />
-      <AchievementGallerySection />
-      <TeacherSection />
-      <BlogSection onNavigate={onNavigate} onOpenPost={onOpenPost} posts={blogPosts} />
-      <AchievementBlogSection onNavigate={onNavigate} onOpenPost={onOpenPost} />
+      <Hero onNavigate={onNavigate} heroSlides={heroSlides} homeContent={homeContent} language={language} />
+      <ProcessSection content={homeContent?.process} />
+      <PersonalizationSection content={homeContent?.personalize} />
+      <FeaturesSection onNavigate={onNavigate} content={homeContent?.features} />
+      <DemoVideoSection content={homeContent?.demo} />
+      <AchievementGallerySection content={homeContent?.gallery} />
+      <TeacherSection content={homeContent?.teachers} />
+      <BlogSection onNavigate={onNavigate} onOpenPost={onOpenPost} posts={blogPosts} content={homeContent?.blog} />
+      <AchievementBlogSection onNavigate={onNavigate} onOpenPost={onOpenPost} content={homeContent?.achievements} />
     </>
   );
 }
@@ -1403,6 +1426,8 @@ export default function App() {
   const [activeSlug, setActiveSlug] = useState(null);
   const [language, setLanguage] = useState("vi");
   const [adminBlogPosts, setAdminBlogPosts] = useState(null);
+  const [homeHeroSlides, setHomeHeroSlides] = useState(null);
+  const [homeContent, setHomeContent] = useState(null);
 
   useEffect(() => {
     let active = true;
@@ -1425,6 +1450,33 @@ export default function App() {
           }
         }
         setAdminBlogPosts(posts);
+      })
+      .catch(() => {});
+    return () => { active = false; };
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+    fetch("/api/landing-content", { cache: "no-store" })
+      .then((response) => response.json())
+      .then(({ heroSlides = [], homeContent: savedHomeContent = null }) => {
+        if (!active || !Array.isArray(heroSlides)) return;
+        for (const slide of heroSlides) {
+          if (slide.tag && slide.tagEn) EN_TRANSLATIONS[slide.tag] = slide.tagEn;
+          if (slide.title && slide.titleEn) EN_TRANSLATIONS[slide.title] = slide.titleEn;
+          if (slide.text && slide.textEn) EN_TRANSLATIONS[slide.text] = slide.textEn;
+        }
+        setHomeHeroSlides(heroSlides);
+        if (savedHomeContent && typeof savedHomeContent === "object") {
+          const register = (value) => {
+            if (!value || typeof value !== "object") return;
+            if (typeof value.vi === "string" && typeof value.en === "string") EN_TRANSLATIONS[value.vi] = value.en;
+            else if (Array.isArray(value)) value.forEach(register);
+            else Object.values(value).forEach(register);
+          };
+          register(savedHomeContent);
+          setHomeContent(savedHomeContent);
+        }
       })
       .catch(() => {});
     return () => { active = false; };
@@ -1478,7 +1530,7 @@ export default function App() {
   else if (page === "bai-viet")
     pageContent = <PostDetailPage slug={activeSlug} onNavigate={navigate} posts={allPosts} />;
   else if (page === "dang-ky") pageContent = <RegistrationPage />;
-      else pageContent = <HomePage onNavigate={navigate} onOpenPost={openPost} blogPosts={blogPosts} />;
+      else pageContent = <HomePage onNavigate={navigate} onOpenPost={openPost} blogPosts={blogPosts} heroSlides={homeHeroSlides} homeContent={homeContent} language={language} />;
 
   return (
     <div className="cm-root">
